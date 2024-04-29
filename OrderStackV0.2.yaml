@@ -1,0 +1,669 @@
+ 
+#
+# CLound Formation Tempalte formation Template
+############################################################################
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: AWS API Gateway with a Lambda Integration
+
+Resources: 
+  VPC:
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      InstanceTenancy: "default"
+
+  InternetGateway:
+    Type: "AWS::EC2::InternetGateway"
+
+  VPCGatewayAttachment:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Properties:
+      VpcId: !Ref "VPC"
+      InternetGatewayId: !Ref "InternetGateway"
+
+ # Public Subnet A1
+  SubnetA1:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: 'us-east-1a'
+      VpcId: !Ref "VPC"
+      CidrBlock: "10.0.0.0/24"
+ 
+ # Public Subnet A2
+  SubnetA2:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: 'us-east-1a'
+      VpcId: !Ref "VPC"
+      CidrBlock: "10.0.0.0/24"
+
+# Public Subnet B1
+  SubnetB1:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: 'us-east-1b' 
+      VpcId: !Ref "VPC"
+      CidrBlock: "10.0.1.0/24"
+
+  SubnetB2:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: 'us-east-1b' 
+      VpcId: !Ref "VPC"
+      CidrBlock: "10.0.1.0/24"
+  
+  SubnetC1:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: 'us-east-1c'
+      VpcId: !Ref "VPC"
+      CidrBlock: "10.0.2.0/24"
+
+  SubnetC2:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: 'us-east-1c'
+      VpcId: !Ref "VPC"
+      CidrBlock: "10.0.2.0/24"
+
+  RouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref "VPC"
+
+  InternetRoute:
+    Type: "AWS::EC2::Route"
+    Properties:
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref RouteTable
+
+  SubnetA1RouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref SubnetA1
+
+  SubnetA2RouteTableAssociationA2:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref SubnetA2
+
+  EIP:
+    Type: "AWS::EC2::EIP"
+    Properties:
+      Domain: "vpc"
+
+  NatA1:
+    Type: "AWS::EC2::NatGateway"
+    Properties:
+      AllocationId: !GetAtt "EIP.AllocationId"
+      SubnetId: !Ref "SubnetA1"
+  NatA2:
+    Type: "AWS::EC2::NatGateway"
+    Properties:
+      AllocationId: !GetAtt "EIP.AllocationId"
+      SubnetId: !Ref "SubnetA2"
+
+  NatRouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref "VPC"
+
+  NatRouteA1:
+    Type: "AWS::EC2::Route"
+    Properties:
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref "NatA1"
+      RouteTableId: !Ref "NatRouteTable"
+  
+  NatRouteA2:
+    Type: "AWS::EC2::Route"
+    Properties:
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref "NatA2"
+      RouteTableId: !Ref "NatRouteTable"
+
+  SubnetB1RouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref NatRouteTable
+      SubnetId: !Ref SubnetB1
+  
+  SubnetB2RouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref NatRouteTable
+      SubnetId: !Ref SubnetB2
+
+  SubnetC1RouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref NatRouteTable
+      SubnetId: !Ref SubnetC
+  
+  SubnetC2RouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref NatRouteTable
+      SubnetId: !Ref SubnetC
+
+  InstanceSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupName: "Example Security Group"
+      GroupDescription: "Lambda Traffic"
+      VpcId: !Ref "VPC"
+      SecurityGroupEgress:
+      - IpProtocol: "-1"
+        CidrIp: "0.0.0.0/0"
+
+  InstanceSecurityGroupIngress:
+    Type: "AWS::EC2::SecurityGroupIngress"
+    DependsOn: "InstanceSecurityGroup"
+    Properties:
+      GroupId: !Ref "InstanceSecurityGroup"
+      IpProtocol: "tcp"
+      FromPort: "0"
+      ToPort: "65535"
+      SourceSecurityGroupId: !Ref "InstanceSecurityGroup"
+  ###############################################
+  #  Product - API 
+  # ######################
+  GetProductListApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      ApiKeySourceType: HEADER
+      Description: An API Gateway with a Lambda Integration
+      EndpointConfiguration:
+        Types:
+          - EDGE
+      Name: Product
+
+  GetProductApiGatewayResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt GetProductListApiGateway.RootResourceId
+      PathPart: 'product'
+      RestApiId: !Ref GetProductListApiGateway
+
+  ApiGatewayMethodPost:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: POST
+      OperationName: 'CreateProductList'
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${pyGetProductListLdFunction.Arn}/invocations'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"             
+        RequestTemplates:
+          application/json: $input.json('$')
+      RequestParameters:
+        method.request.querystring.name: false
+      ResourceId: !Ref GetProductApiGatewayResource
+      RestApiId: !Ref GetProductListApiGateway
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          StatusCode: '200'
+
+  ApiGatewayModel:
+    Type: AWS::ApiGateway::Model
+    Properties:
+      ContentType: 'application/json'
+      RestApiId: !Ref GetProductListApiGateway
+      Schema: {}
+
+  ApiGatewayMethodGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: GET
+      OperationName: 'GetProductList'
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: GET
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${pyGetProductListLdFunction.Arn}/invocations'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"             
+        RequestTemplates:
+          application/json: !Join 
+            - ''
+            - - |
+              - |
+                {
+              - |
+                  #foreach($param in $input.params().querystring.keySet())
+                  "$param": "$util.escapeJavaScript($input.params().querystring.get($param))" #if($foreach.hasNext),#end
+                  #end
+              - |
+                }
+      ResourceId: !Ref GetProductApiGatewayResource
+      RestApiId: !Ref GetProductListApiGateway
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true    
+
+  ApiGatewayStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      DeploymentId: !Ref ApiGatewayDeployment
+      Description: Lambda API Stage v0
+      RestApiId: !Ref GetProductListApiGateway
+      StageName: 'v0'
+
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: 
+      - ApiGatewayMethodPost
+      - ApiGatewayMethodGet
+    Properties:
+      Description: Lambda API Deployment
+      RestApiId: !Ref GetProductListApiGateway
+
+
+  pyGetProductListLdFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          def lambda_handler (event, context):
+            response = {
+              'isBase64Encoded': False,
+              'statusCode': 200,
+              'headers': {},
+              'multiValueHeaders': {},
+              'body': 'Return the list of Products GetProductsLists'
+            }
+            return response          
+      Description: AWS Lambda function
+      FunctionName: 'pyGetProductList'
+      Handler: lambda_function.lambda_handler
+      MemorySize: 256
+      Role: !GetAtt IamRoleLambdaExecution.Arn
+      Runtime: python3.9
+      Timeout: 60
+      VpcConfig:
+        SecurityGroupIds:
+            - !Ref "InstanceSecurityGroup"
+        SubnetIds:
+            - !Ref "SubnetB"
+            - !Ref "SubnetC"
+  
+  AppLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/GetProductsList"
+
+##################################################################
+## Order API
+########################################################
+
+  OrderApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      ApiKeySourceType: HEADER
+      Description: An API Gateway with a Lambda Integration
+      EndpointConfiguration:
+        Types:
+          - EDGE
+      Name: Order
+
+  OrderApiGatewayResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt OrderApiGateway.RootResourceId
+      PathPart: 'order'
+      RestApiId: !Ref OrderApiGateway
+
+  OrderApiGatewayMethodPost:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: POST
+      OperationName: 'SubmitOrder'
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: POST
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${pyOrderAckLdFunction.Arn}/invocations'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"             
+        RequestTemplates:
+          application/json: $input.json('$')
+      RequestParameters:
+        method.request.querystring.name: false
+      ResourceId: !Ref OrderApiGatewayResource
+      RestApiId: !Ref OrderApiGateway
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          StatusCode: '200'
+
+  OrderApiGatewayModel:
+    Type: AWS::ApiGateway::Model
+    Properties:
+      ContentType: 'application/json'
+      RestApiId: !Ref OrderApiGateway
+      Schema: {}
+
+  OrderApiGatewayMethodGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: false
+      AuthorizationType: NONE
+      HttpMethod: GET
+      OperationName: 'GetOrderStatus'
+      Integration:
+        ConnectionType: INTERNET
+        Credentials: !GetAtt ApiGatewayIamRole.Arn
+        IntegrationHttpMethod: GET
+        PassthroughBehavior: WHEN_NO_MATCH
+        TimeoutInMillis: 29000
+        Type: AWS_PROXY
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${pyGetOrderStatusLdFunction.Arn}/invocations'
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"             
+        RequestTemplates:
+          application/json: !Join 
+            - ''
+            - - |
+              - |
+                {
+              - |
+                  #foreach($param in $input.params().querystring.keySet())
+                  "$param": "$util.escapeJavaScript($input.params().querystring.get($param))" #if($foreach.hasNext),#end
+                  #end
+              - |
+                }
+      ResourceId: !Ref OrderApiGatewayResource
+      RestApiId: !Ref OrderApiGateway
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true    
+
+  OrderApiGatewayStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      DeploymentId: !Ref OrderApiGatewayDeployment
+      Description: Production Deploymet
+      RestApiId: !Ref OrderApiGateway
+      StageName: 'production'
+
+  OrderApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: 
+      - OrderApiGatewayMethodPost
+      - OrderApiGatewayMethodGet
+    Properties:
+      Description: Lambda API Deployment
+      RestApiId: !Ref OrderApiGateway
+
+#######################################
+# ORder LAMDA Functions 
+###############
+
+  pyOrderAckLdFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          def lambda_handler (event, context):
+            response = {
+              'isBase64Encoded': False,
+              'statusCode': 200,
+              'headers': {},
+              'multiValueHeaders': {},
+              'body': 'Return the list of Products GetProductsLists'
+            }
+            return response          
+      Description: AWS Lambda function
+      FunctionName: 'pyOrderAckLdFunction'
+      Handler: lambda_function.lambda_handler
+      MemorySize: 256
+      Role: !GetAtt IamRoleLambdaExecution.Arn
+      Runtime: python3.9
+      Timeout: 60
+      VpcConfig:
+        SecurityGroupIds:
+            - !Ref "InstanceSecurityGroup"
+        SubnetIds:
+            - !Ref "SubnetB"
+            - !Ref "SubnetC"
+
+  pyProcessOrderLdFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          def lambda_handler (event, context):
+            response = {
+              'isBase64Encoded': False,
+              'statusCode': 200,
+              'headers': {},
+              'multiValueHeaders': {},
+              'body': 'Return the list of Products GetProductsLists'
+            }
+            return response          
+      Description: AWS Lambda function
+      FunctionName: 'pyProcessOrderLdFunction'
+      Handler: lambda_function.lambda_handler
+      MemorySize: 256
+      Role: !GetAtt IamRoleLambdaExecution.Arn
+      Runtime: python3.9
+      Timeout: 60
+      VpcConfig:
+        SecurityGroupIds:
+            - !Ref "InstanceSecurityGroup"
+        SubnetIds:
+            - !Ref "SubnetB"
+            - !Ref "SubnetC"
+
+  pyFulfilOrderLdFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          def lambda_handler (event, context):
+            response = {
+              'isBase64Encoded': False,
+              'statusCode': 200,
+              'headers': {},
+              'multiValueHeaders': {},
+              'body': 'Return the list of Products GetProductsLists'
+            }
+            return response          
+      Description: AWS Lambda function
+      FunctionName: 'pyFulfilOrderLdFunction'
+      Handler: lambda_function.lambda_handler
+      MemorySize: 256
+      Role: !GetAtt IamRoleLambdaExecution.Arn
+      Runtime: python3.9
+      Timeout: 60
+      VpcConfig:
+        SecurityGroupIds:
+            - !Ref "InstanceSecurityGroup"
+        SubnetIds:
+            - !Ref "SubnetB"
+            - !Ref "SubnetC"
+
+  pyShipOrderLdFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          def lambda_handler (event, context):
+            response = {
+              'isBase64Encoded': False,
+              'statusCode': 200,
+              'headers': {},
+              'multiValueHeaders': {},
+              'body': 'You Order is shipped'
+            }
+            return response          
+      Description: AWS Lambda function
+      FunctionName: 'pyShipOrderLdFunction'
+      Handler: lambda_function.lambda_handler
+      MemorySize: 256
+      Role: !GetAtt IamRoleLambdaExecution.Arn
+      Runtime: python3.9
+      Timeout: 60
+      VpcConfig:
+        SecurityGroupIds:
+            - !Ref "InstanceSecurityGroup"
+        SubnetIds:
+            - !Ref "SubnetB"
+            - !Ref "SubnetC"
+
+  pyGetOrderStatusLdFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          def lambda_handler (event, context):
+            response = {
+              'isBase64Encoded': False,
+              'statusCode': 200,
+              'headers': {},
+              'multiValueHeaders': {},
+              'body': 'Return Status of Order'
+            }
+            return response          
+      Description: AWS Lambda function
+      FunctionName: 'pyGetOrderStatusLdFunction'
+      Handler: lambda_function.lambda_handler
+      MemorySize: 256
+      Role: !GetAtt IamRoleLambdaExecution.Arn
+      Runtime: python3.9
+      Timeout: 60
+      VpcConfig:
+        SecurityGroupIds:
+            - !Ref "InstanceSecurityGroup"
+        SubnetIds:
+            - !Ref "SubnetB"
+            - !Ref "SubnetC"
+
+
+#########################################
+# ORDER API End
+
+
+###########################
+# LAMDA Execution Role
+# ####################################
+  IamRoleLambdaExecution:
+    Type: "AWS::IAM::Role"
+    Properties:
+      Path: "/"
+      RoleName: ProductOrderLambda 
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Effect: "Allow"
+          Principal:
+            Service:
+            - "lambda.amazonaws.com"
+          Action: "sts:AssumeRole"
+      ManagedPolicyArns: 
+      - "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+      Policies:
+      - PolicyName: LambdaAccessInterface
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+          - Effect: "Allow"
+            Action:
+            - "logs:CreateLogStream"
+            - "logs:CreateLogGroup"
+            - "logs:PutLogEvents"
+            - "ec2:*"
+            - "logs:*"
+            - "codepipeline:*"
+            - 'lambda:*'
+            - "codepipeline:*"
+            - "sns:*"
+            - "ses:*"
+            - "dynamodb:*"
+            - "sqs:*"
+            Resource: "*"
+            #- !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${LambdaName}*:*"
+
+##
+# API Gatway IAM Role
+#######################################
+  ApiGatewayIamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: ''
+            Effect: 'Allow'
+            Principal:
+              Service:
+                - 'apigateway.amazonaws.com'
+            Action:
+              - 'sts:AssumeRole'
+      Path: '/'
+      Policies:
+        - PolicyName: LambdaAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action: 
+                  - 'lambda:*'
+                  - 'logs:*'
+                  - "ec2:*"
+                  - 'lambda:*'
+                  - "codepipeline:*"
+                  - "sns:*"
+                  - "ses:*"
+                  - "dynamodb:*"
+                  - "sqs:*"
+                Resource: !GetAtt pyGetProductListLdFunction.Arn
